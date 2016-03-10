@@ -2,6 +2,7 @@ package avinash.pet.project.androidrecorder;
 
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.media.audiofx.Visualizer;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -18,14 +19,18 @@ public class MainActivity extends AppCompatActivity {
     private boolean isRecording;
     private boolean isPlaying;
     private MediaPlayer player;
+    private MyVisualizer visualizerView;
+    private Visualizer mVisualizer;
+    private MediaPlayer.OnCompletionListener completeListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button record = (Button) findViewById(R.id.btntoggelRec);
-        Button playBack = (Button) findViewById(R.id.btnPlayRec);
+        final Button record = (Button) findViewById(R.id.btntoggelRec);
+        final Button playBack = (Button) findViewById(R.id.btnPlayRec);
+        visualizerView = (MyVisualizer) findViewById(R.id.visualizer);
 
         // set recording boolean flag to false
         isRecording = false;
@@ -47,60 +52,95 @@ public class MainActivity extends AppCompatActivity {
         record.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(isRecording){
-                    Toast.makeText(MainActivity.this,"Recording Stoped",Toast.LENGTH_SHORT).show();
+                if (isRecording) {
+                    Toast.makeText(MainActivity.this, "Recording Stoped", Toast.LENGTH_SHORT).show();
                     audioRecorder.stop();
                     audioRecorder.release();
-                    isRecording=false;
-                    ((Button)v).setText("Record");
+                    isRecording = false;
+                    playBack.setEnabled(true);
+                    ((Button) v).setText("Record");
 
 
-                }else {
+                } else {
                     try {
-                        Toast.makeText(MainActivity.this,"Recording Started",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "Recording Started", Toast.LENGTH_SHORT).show();
                         audioRecorder.prepare();
                         audioRecorder.start();
-                        isRecording=true;
-                        ((Button)v).setText("Stop");
-                    }catch (Exception ex){
-                        Toast.makeText(MainActivity.this,"Recording Error",Toast.LENGTH_SHORT).show();
+                        isRecording = true;
+                        ((Button) v).setText("Stop");
+                        playBack.setEnabled(false);
+                    } catch (Exception ex) {
+                        Toast.makeText(MainActivity.this, "Recording Error", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
         });
         // end of step 2
 
-        player = new MediaPlayer();
-
         // step 3 : setup playback start/Stop
 
         playBack.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(isPlaying){
+                if (isPlaying) {
                     player.stop();
                     player.release();
                     isPlaying = false;
-                    ((Button)v).setText("Play");
-                }else {
+                    record.setEnabled(true);
+                    mVisualizer.setEnabled(false);
+                    ((Button) v).setText("Play");
+                } else {
 
                     try {
+                        record.setEnabled(false);
+                        player = new MediaPlayer();
                         player.setDataSource(outputFile);
+                        player.setOnCompletionListener(completeListener);
                         player.prepare();
+                        setupVisualizerFxAndUI();
                         player.start();
-                        isPlaying=true;
-                        ((Button)v).setText("Stop");
+                        mVisualizer.setEnabled(true);
+                        isPlaying = true;
+                        ((Button) v).setText("Stop");
                         Toast.makeText(MainActivity.this, "PlayBack Started", Toast.LENGTH_SHORT).show();
                     } catch (IOException e) {
                         e.printStackTrace();
-                        Toast.makeText(MainActivity.this,"No recording to play please record first",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "No recording to play please record first", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
         });
 
-
-
+        completeListener = new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                player.stop();
+                player.release();
+                isPlaying = false;
+                record.setEnabled(true);
+                mVisualizer.setEnabled(false);
+                playBack.setText("Play");
+            }
+        };
 
     }
+
+    private void setupVisualizerFxAndUI() {
+
+        // Create the Visualizer object and attach it to our media player.
+        mVisualizer = new Visualizer(player.getAudioSessionId());
+        mVisualizer.setCaptureSize(Visualizer.getCaptureSizeRange()[1]);
+        mVisualizer.setDataCaptureListener(
+                new Visualizer.OnDataCaptureListener() {
+                    public void onWaveFormDataCapture(Visualizer visualizer, byte[] bytes, int samplingRate) {
+                        visualizerView.updateVisualizer(bytes);
+                    }
+
+                    public void onFftDataCapture(Visualizer visualizer,
+                                                 byte[] bytes, int samplingRate) {
+                    }
+                }, Visualizer.getMaxCaptureRate() / 2, true, false);
+    }
+
+
 }
